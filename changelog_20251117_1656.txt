@@ -1,0 +1,2 @@
+fix(validation): handle config validation errors
+Date: 2025-11-17 09:30:32 +00:00
