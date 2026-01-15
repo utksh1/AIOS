@@ -1,0 +1,2 @@
+fix(lifecycle): handle agent lifecycle edge cases
+Date: 2026-01-15 16:54:14 +00:00
