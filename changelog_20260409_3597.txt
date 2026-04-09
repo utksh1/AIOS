@@ -1,0 +1,2 @@
+feat(fallback): add generic error fallbacks
+Date: 2026-04-09 13:48:38 +00:00
