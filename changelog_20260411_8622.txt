@@ -1,0 +1,2 @@
+test(errors): add error handling tests
+Date: 2026-04-11 14:42:33 +00:00
