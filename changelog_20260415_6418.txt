@@ -1,0 +1,2 @@
+refactor(performance): optimize injection performance
+Date: 2026-04-15 16:04:35 +00:00
