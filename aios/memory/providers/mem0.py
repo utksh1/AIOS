@@ -264,6 +264,20 @@ class Mem0Provider(MemoryProvider):
                 "timestamp": memory_note.timestamp,
                 "memory_note_id": memory_note.id
             }
+
+            # Preserve cross-agent metadata fields so
+            # that _apply_sharing_filter can read them
+            # on retrieval.
+            if hasattr(memory_note, 'metadata') and memory_note.metadata:
+                for key in (
+                    "owner_agent",
+                    "sharing_policy",
+                    "memory_type",
+                    "user_id",
+                ):
+                    val = memory_note.metadata.get(key)
+                    if val is not None:
+                        metadata[key] = val
             
             # Build add parameters
             add_kwargs = {
@@ -431,14 +445,20 @@ class Mem0Provider(MemoryProvider):
                 "agent_id", self.default_agent_id
             )
             
-            # Build search parameters
-            search_kwargs = {
+            # Build search parameters.
+            # Mem0 >= 0.1.29 requires entity IDs inside
+            # a ``filters`` dict rather than as top-level
+            # keyword arguments.
+            search_filters: dict = {
                 "user_id": search_user_id,
-                "limit": k,
+            }
+            search_kwargs: dict = {
+                "filters": search_filters,
+                "top_k": k,
             }
             
             if agent_id:
-                search_kwargs["agent_id"] = agent_id
+                search_filters["agent_id"] = agent_id
             
             # Search Mem0
             results = self.client.search(
@@ -548,14 +568,19 @@ class Mem0Provider(MemoryProvider):
             "agent_id", self.default_agent_id
         )
         
-        # Build search parameters
-        search_kwargs = {
+        # Build search parameters.
+        # Mem0 >= 0.1.29 requires entity IDs inside
+        # a ``filters`` dict.
+        search_filters: dict = {
             "user_id": search_user_id,
-            "limit": k,
+        }
+        search_kwargs: dict = {
+            "filters": search_filters,
+            "top_k": k,
         }
         
         if agent_id:
-            search_kwargs["agent_id"] = agent_id
+            search_filters["agent_id"] = agent_id
         
         try:
             results = self.client.search(

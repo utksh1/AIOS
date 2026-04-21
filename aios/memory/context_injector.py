@@ -117,14 +117,16 @@ class ContextInjector:
                 return (query, diagnostics)
 
             # Retrieve memories scoped to this agent.
-            # ``agent_name`` is used for ownership filtering
-            # inside the provider (not as ``user_id``).
+            # Pass ``user_id=agent_name`` so the Mem0
+            # provider searches under the scope that
+            # ConversationExtractor writes to.
             mem_query = MemoryQuery(
                 operation_type="retrieve_memory",
                 params={
                     "content": user_text,
                     "k": self.max_memories,
                     "agent_name": agent_name,
+                    "user_id": agent_name,
                 },
             )
             response = (
@@ -133,36 +135,52 @@ class ContextInjector:
                 )
             )
 
-            if (
-                not response.success
-                or not response.search_results
-            ):
+            own_results = []
+            if response.success and response.search_results:
+                own_results = response.search_results
                 logger.info(
-                    "No memories retrieved for user_id=%s",
+                    "Retrieved %d own memories for agent=%s",
+                    len(own_results),
                     agent_name,
                 )
-                diagnostics["prompt_tokens_after"] = (
-                    diagnostics["prompt_tokens_before"]
-                )
-                return (query, diagnostics)
-
-            own_results = response.search_results
-            logger.info(
-                "Retrieved %d own memories for agent=%s",
-                len(own_results),
-                agent_name,
-            )
 
             # --- Cross-agent shared memory retrieval ---
+            # Derive user_id from own memories first; fall
+            # back to the kernel's known_user_ids registry
+            # so that shared retrieval works even when the
+            # requesting agent has no memories of its own.
             derived_user_id = (
                 self._extract_user_id_from_results(
                     own_results
                 )
             )
 
+            # If own memories didn't yield a real user_id
+            # (or yielded the agent name), consult the
+            # MemoryManager's registry of user_ids that
+            # other agents have written.
+            if (
+                not derived_user_id
+                or derived_user_id == agent_name
+            ):
+                known = getattr(
+                    self.memory_manager,
+                    "known_user_ids",
+                    set(),
+                )
+                # Pick the first known user_id that
+                # isn't the agent's own name.
+                for uid in known:
+                    if uid and uid != agent_name:
+                        derived_user_id = uid
+                        break
+
             results = list(own_results)
 
-            if derived_user_id:
+            if (
+                derived_user_id
+                and derived_user_id != agent_name
+            ):
                 shared = self._retrieve_shared_memories(
                     user_text, derived_user_id, agent_name
                 )
@@ -186,6 +204,16 @@ class ContextInjector:
                         derived_user_id,
                         shared_agents,
                     )
+
+            if not results:
+                logger.info(
+                    "No memories retrieved for agent=%s",
+                    agent_name,
+                )
+                diagnostics["prompt_tokens_after"] = (
+                    diagnostics["prompt_tokens_before"]
+                )
+                return (query, diagnostics)
 
             # candidate_count = merged set before filtering
             diagnostics["candidate_count"] = len(results)
