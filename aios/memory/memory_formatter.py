@@ -6,10 +6,11 @@ on the ``memory_type`` metadata field.  Operates as a pure function
 at inject time — stored memory content is never modified.
 
 Supported memory types:
-  - ``"profile"``      → user profile sentence
-  - ``"task_context"`` → task context sentence
+  - ``"profile"``      → user profile sentence (hardcoded template)
+  - ``"task_context"`` → task context sentence (hardcoded template)
   - ``"conversation"`` → returned as-is
-  - unknown / missing  → returned as-is
+  - any other type     → generic ``"{key}: {value}."`` formatting
+  - missing type       → generic formatting if JSON, else as-is
 """
 import json
 import logging
@@ -127,6 +128,28 @@ def _format_task_context(data: dict) -> str:
     return " ".join(parts)
 
 
+def _format_generic(data: dict, memory_type: str) -> str:
+    """Format an arbitrary JSON dict into a natural language
+    sentence using the ``memory_type`` as a human-readable
+    label.
+
+    Converts underscores to spaces in the label and flattens
+    all key-value pairs into ``"{key}: {value}."`` sentences.
+    This ensures any agent-defined memory type gets readable
+    formatting without requiring a dedicated template.
+    """
+    label = memory_type.replace("_", " ").capitalize()
+    parts: list[str] = [f"{label}:"]
+
+    for key, value in data.items():
+        readable_key = key.replace("_", " ")
+        parts.append(
+            f"{readable_key}: {_value_to_str(value)}."
+        )
+
+    return " ".join(parts)
+
+
 # ------------------------------------------------------------------
 # Public API
 # ------------------------------------------------------------------
@@ -149,12 +172,14 @@ def format_memory(content: str, metadata: dict) -> str:
     try:
         memory_type = metadata.get("memory_type", "")
         if not memory_type:
-            return content
+            # No type hint — try generic JSON formatting,
+            # fall back to raw content if not JSON.
+            data = _try_parse_json(content)
+            if data is None:
+                return content
+            return _format_generic(data, "memory")
 
         if memory_type == "conversation":
-            return content
-
-        if memory_type not in ("profile", "task_context"):
             return content
 
         data = _try_parse_json(content)
@@ -164,7 +189,13 @@ def format_memory(content: str, metadata: dict) -> str:
         if memory_type == "profile":
             return _format_profile(data)
 
-        return _format_task_context(data)
+        if memory_type == "task_context":
+            return _format_task_context(data)
+
+        # Unknown memory_type with valid JSON — use
+        # generic formatting so any agent-defined type
+        # gets readable output instead of raw JSON.
+        return _format_generic(data, memory_type)
     except Exception:
         logger.warning(
             "Memory formatting failed, returning raw "
