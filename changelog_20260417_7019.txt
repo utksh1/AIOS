@@ -1,2 +1,0 @@
-fix(discovery): resolve cross-agent discovery bugs
-Date: 2026-04-17 09:28:12 +00:00

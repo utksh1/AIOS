@@ -1,2 +1,0 @@
-docs(architecture): update system architecture docs
-Date: 2026-02-09 13:34:31 +00:00
